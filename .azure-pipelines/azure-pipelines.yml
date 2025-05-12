@@ -61,6 +61,11 @@ steps:
       )
     displayName: '✅ Validate myapp.zip exists'
 
+  - script: |
+      echo "Listing contents of the zip archive..."
+      powershell -Command "Add-Type -A 'System.IO.Compression.FileSystem'; [System.IO.Compression.ZipFile]::OpenRead('$(Build.ArtifactStagingDirectory)\myapp.zip').Entries | ForEach-Object { $_.FullName }"
+    displayName: '🧾 List contents of ZIP file'
+
   - task: PublishBuildArtifacts@1
     inputs:
       PathtoPublish: '$(Build.ArtifactStagingDirectory)'
@@ -87,11 +92,19 @@ steps:
         set stagingFolder=C:\temp\staging\MyWebApp
         set targetFolder="C:\inetpub\wwwroot\Optimus Apps\MyWebApp"
 
-        echo "Unzipping app to staging folder..."
+        echo "Unzipping from: $(Pipeline.Workspace)\app\myapp.zip"
+        echo "To staging folder: %%stagingFolder%%"
+
         powershell -Command "Expand-Archive -Path '$(Pipeline.Workspace)\app\myapp.zip' -DestinationPath %%stagingFolder%% -Force"
+
+        echo "Listing contents of staging folder..."
+        dir /s %%stagingFolder%%
 
         echo "Copying from staging to IIS folder..."
         robocopy %%stagingFolder%% %%targetFolder%% /E /MIR
+
+        echo "Listing contents of IIS folder..."
+        dir /s %%targetFolder%%
 
         echo "Cleaning up staging folder..."
         rmdir /s /q %%stagingFolder%%
@@ -105,4 +118,3 @@ steps:
         ) else (
           echo ✔️ App Pool recycled successfully.
         )
-        
