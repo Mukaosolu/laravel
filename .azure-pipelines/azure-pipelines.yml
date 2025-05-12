@@ -105,3 +105,4 @@ steps:
         ) else (
           echo ✔️ App Pool recycled successfully.
         )
+        
