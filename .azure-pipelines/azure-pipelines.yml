@@ -1,0 +1,107 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  name: Default
+  demands:
+    - agent.os -equals Windows_NT
+
+variables:
+  phpVersion: '8.2'
+
+steps:
+  - checkout: self
+
+  - script: |
+      php -v
+    displayName: '✅ Verify PHP Installation'
+
+  - script: |
+      echo "Installing Composer..."
+      php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+      php composer-setup.php
+      php -r "unlink('composer-setup.php');"
+      php composer.phar --version
+    displayName: '✅ Install Composer'
+
+  - script: |
+      echo "Installing Laravel dependencies..."
+      php composer.phar install --no-interaction --prefer-dist
+      copy .env.example .env
+      php artisan key:generate
+    displayName: '✅ Install Laravel dependencies'
+
+  - script: |
+      echo "Running PHPUnit tests..."
+      ./vendor/bin/phpunit --configuration phpunit.xml
+    displayName: '✅ Run PHPUnit tests'
+
+  - script: |
+      echo "Creating myapp directory and copying files..."
+      mkdir "$(Build.ArtifactStagingDirectory)\myapp"
+      xcopy * "$(Build.ArtifactStagingDirectory)\myapp" /E /I /Y | more
+
+      echo "Zipping myapp directory..."
+      powershell Compress-Archive -Path "$(Build.ArtifactStagingDirectory)\myapp\*" -DestinationPath "$(Build.ArtifactStagingDirectory)\myapp.zip"
+
+      echo "Deleting unzipped myapp directory..."
+      rmdir /s /q "$(Build.ArtifactStagingDirectory)\myapp"
+    displayName: '✅ Package and clean up myapp'
+
+  - script: |
+      echo "Validating myapp.zip creation..."
+      if exist "$(Build.ArtifactStagingDirectory)\myapp.zip" (
+        echo ✅ myapp.zip exists.
+      ) else (
+        echo ❌ myapp.zip not found!
+        dir "$(Build.ArtifactStagingDirectory)"
+        exit /b 1
+      )
+    displayName: '✅ Validate myapp.zip exists'
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      ArtifactName: 'drop'
+      publishLocation: 'Container'
+    displayName: '📦 Publish build artifacts'
+
+  - task: DownloadPipelineArtifact@2
+    inputs:
+      artifactName: 'drop'
+      targetPath: '$(Pipeline.Workspace)/app'
+    displayName: '📥 Download Build Artifact'
+
+  - script: |
+      echo "Listing downloaded artifacts:"
+      dir "$(Pipeline.Workspace)\app"
+    displayName: '🔍 Check downloaded artifacts'
+
+  - task: CmdLine@2
+    displayName: '🚀 Deploy to IIS via Staging'
+    inputs:
+      script: |
+        echo "Setting up staging and target paths..."
+        set stagingFolder=C:\temp\staging\MyWebApp
+        set targetFolder="C:\inetpub\wwwroot\Optimus Apps\MyWebApp"
+
+        echo "Unzipping app to staging folder..."
+        powershell -Command "Expand-Archive -Path '$(Pipeline.Workspace)\app\myapp.zip' -DestinationPath %%stagingFolder%% -Force"
+
+        echo "Copying from staging to IIS folder..."
+        robocopy %%stagingFolder%% %%targetFolder%% /E /MIR
+
+        echo "Cleaning up staging folder..."
+        rmdir /s /q %%stagingFolder%%
+
+        echo "Recycling IIS App Pool..."
+        %windir%\system32\inetsrv\appcmd recycle apppool /apppool.name:MyWebApp-pool
+
+        if %errorlevel% neq 0 (
+          echo ❌ Failed to recycle App Pool
+          exit /b 1
+        ) else (
+          echo ✔️ App Pool recycled successfully.
+        )
