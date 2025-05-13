@@ -41,10 +41,15 @@ steps:
   - script: |
       echo "Creating myapp directory and copying files..."
       mkdir "$(Build.ArtifactStagingDirectory)\myapp"
-      xcopy * "$(Build.ArtifactStagingDirectory)\myapp" /E /I /Y | more
+
+      echo "Copying files..."
+      robocopy . "$(Build.ArtifactStagingDirectory)\myapp" /E /NFL /NDL /NJH /NJS /NC
+
+      echo "Contents of myapp before zipping:"
+      dir "$(Build.ArtifactStagingDirectory)\myapp" /s
 
       echo "Zipping myapp directory..."
-      powershell Compress-Archive -Path "$(Build.ArtifactStagingDirectory)\myapp\*" -DestinationPath "$(Build.ArtifactStagingDirectory)\myapp.zip"
+      powershell -Command "Compress-Archive -Path '$(Build.ArtifactStagingDirectory)\myapp\*' -DestinationPath '$(Build.ArtifactStagingDirectory)\myapp.zip'"
 
       echo "Deleting unzipped myapp directory..."
       rmdir /s /q "$(Build.ArtifactStagingDirectory)\myapp"
@@ -85,24 +90,24 @@ steps:
       script: |
         echo "Setting up staging and target paths..."
         set stagingFolder=C:\temp\staging\MyWebApp
-        set targetFolder="C:\inetpub\wwwroot\Optimus Apps\MyWebApp"
+        set targetFolder=C:\inetpub\wwwroot\Optimus Apps\MyWebApp
 
         echo "Creating staging directory if it does not exist..."
         if not exist "%stagingFolder%" (
-        mkdir "%stagingFolder%"
-        echo "✅ Created staging directory: %stagingFolder%"
+          mkdir "%stagingFolder%"
+          echo "✅ Created staging directory: %stagingFolder%"
         ) else (
-        echo "ℹ️ Staging directory already exists: %stagingFolder%"
+          echo "ℹ️ Staging directory already exists: %stagingFolder%"
         )
 
         echo "Unzipping app to staging folder..."
-        powershell -Command "Expand-Archive -Path '$(Pipeline.Workspace)\app\myapp.zip' -DestinationPath %%stagingFolder%% -Force"
+        powershell -NoProfile -Command "$zip='$(Pipeline.Workspace)\app\myapp.zip'; $dest='C:\temp\staging\MyWebApp'; Expand-Archive -Path $zip -DestinationPath $dest -Force"
+
+        echo "Listing contents of staging folder after unzip:"
+        dir "%stagingFolder%" /s
 
         echo "Copying from staging to IIS folder..."
-        robocopy %%stagingFolder%% %%targetFolder%% /E /MIR
-
-        echo "Cleaning up staging folder..."
-        rmdir /s /q %%stagingFolder%%
+        robocopy "%stagingFolder%" "%targetFolder%" /E /MIR
 
         echo "Recycling IIS App Pool..."
         %windir%\system32\inetsrv\appcmd recycle apppool /apppool.name:MyWebApp-pool
