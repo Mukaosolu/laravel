@@ -1,7 +1,7 @@
 trigger:
   branches:
     include:
-      - 12.x
+      - main
 
 pool:
   name: Default
@@ -61,11 +61,6 @@ steps:
       )
     displayName: '✅ Validate myapp.zip exists'
 
-  - script: |
-      echo "Listing contents of the zip archive..."
-      powershell -Command "Add-Type -A 'System.IO.Compression.FileSystem'; [System.IO.Compression.ZipFile]::OpenRead('$(Build.ArtifactStagingDirectory)\myapp.zip').Entries | ForEach-Object { $_.FullName }"
-    displayName: '🧾 List contents of ZIP file'
-
   - task: PublishBuildArtifacts@1
     inputs:
       PathtoPublish: '$(Build.ArtifactStagingDirectory)'
@@ -113,8 +108,8 @@ steps:
         %windir%\system32\inetsrv\appcmd recycle apppool /apppool.name:MyWebApp-pool
 
         if %errorlevel% neq 0 (
-        echo ❌ Failed to recycle App Pool
-        exit /b 1
+          echo ❌ Failed to recycle App Pool
+          exit /b 1
         ) else (
-        echo ✔️ App Pool recycled successfully.
+          echo ✔️ App Pool recycled successfully.
         )
