@@ -92,19 +92,19 @@ steps:
         set stagingFolder=C:\temp\staging\MyWebApp
         set targetFolder="C:\inetpub\wwwroot\Optimus Apps\MyWebApp"
 
-        echo "Unzipping from: $(Pipeline.Workspace)\app\myapp.zip"
-        echo "To staging folder: %%stagingFolder%%"
+        echo "Creating staging directory if it does not exist..."
+        if not exist "%stagingFolder%" (
+        mkdir "%stagingFolder%"
+        echo "✅ Created staging directory: %stagingFolder%"
+        ) else (
+        echo "ℹ️ Staging directory already exists: %stagingFolder%"
+        )
 
+        echo "Unzipping app to staging folder..."
         powershell -Command "Expand-Archive -Path '$(Pipeline.Workspace)\app\myapp.zip' -DestinationPath %%stagingFolder%% -Force"
-
-        echo "Listing contents of staging folder..."
-        dir /s %%stagingFolder%%
 
         echo "Copying from staging to IIS folder..."
         robocopy %%stagingFolder%% %%targetFolder%% /E /MIR
-
-        echo "Listing contents of IIS folder..."
-        dir /s %%targetFolder%%
 
         echo "Cleaning up staging folder..."
         rmdir /s /q %%stagingFolder%%
@@ -113,8 +113,8 @@ steps:
         %windir%\system32\inetsrv\appcmd recycle apppool /apppool.name:MyWebApp-pool
 
         if %errorlevel% neq 0 (
-          echo ❌ Failed to recycle App Pool
-          exit /b 1
+        echo ❌ Failed to recycle App Pool
+        exit /b 1
         ) else (
-          echo ✔️ App Pool recycled successfully.
+        echo ✔️ App Pool recycled successfully.
         )
