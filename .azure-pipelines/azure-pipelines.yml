@@ -90,7 +90,7 @@ steps:
       script: |
         echo "Setting up staging and target paths..."
         set stagingFolder=C:\temp\staging\MyWebApp
-        set targetFolder=C:\inetpub\wwwroot\Optimus Apps\MyWebApp
+        set targetFolder=C:\MyWebApp
 
         echo "Creating staging directory if it does not exist..."
         if not exist "%stagingFolder%" (
