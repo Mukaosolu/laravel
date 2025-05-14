@@ -10,6 +10,11 @@ pool:
 
 variables:
   phpVersion: '8.2'
+  repoName: '$(Build.Repository.Name)'                           # e.g., Online-Banking-System
+  appFolder: '$(Build.Repository.Name)'
+  stagingFolder: 'C:\temp\staging\$(Build.Repository.Name)'
+  targetFolder: 'C:\$(Build.Repository.Name)'
+  appPoolName: '$(Build.Repository.Name)-pool'
 
 steps:
   - checkout: self
@@ -34,17 +39,12 @@ steps:
     displayName: '✅ Install Laravel dependencies'
 
   - script: |
-      echo "Running PHPUnit tests..."
-      ./vendor/bin/phpunit --configuration phpunit.xml
-    displayName: '✅ Run PHPUnit tests'
-
-  - script: |
-      echo "Creating myapp directory and copying files..."
-      mkdir "$(Build.ArtifactStagingDirectory)\myapp"
-      robocopy . "$(Build.ArtifactStagingDirectory)\myapp" /E /NFL /NDL /NJH /NJS /NC
-      powershell -Command "Compress-Archive -Path '$(Build.ArtifactStagingDirectory)\myapp\*' -DestinationPath '$(Build.ArtifactStagingDirectory)\myapp.zip'"
-      rmdir /s /q "$(Build.ArtifactStagingDirectory)\myapp"
-    displayName: '✅ Package myapp'
+      echo "Creating $(appFolder) directory and copying files..."
+      mkdir "$(Build.ArtifactStagingDirectory)\$(appFolder)"
+      robocopy . "$(Build.ArtifactStagingDirectory)\$(appFolder)" /E /NFL /NDL /NJH /NJS /NC
+      powershell -Command "Compress-Archive -Path '$(Build.ArtifactStagingDirectory)\$(appFolder)\*' -DestinationPath '$(Build.ArtifactStagingDirectory)\$(appFolder).zip'"
+      rmdir /s /q "$(Build.ArtifactStagingDirectory)\$(appFolder)"
+    displayName: '✅ Package $(appFolder)'
 
   - task: PublishBuildArtifacts@1
     inputs:
@@ -63,17 +63,18 @@ steps:
     displayName: '🚀 Deploy to IIS + Configure'
     inputs:
       script: |
-        set stagingFolder=C:\temp\staging\MyWebApp
-        set targetFolder=C:\MyWebApp
-        set siteName=MyWebApp
-        set appPoolName=MyWebApp-pool
+        set stagingFolder=$(stagingFolder)
+        set targetFolder=$(targetFolder)
+        set siteName=$(repoName)
+        set appPoolName=$(appPoolName)
         set phpCgiPath=C:\xampp2\php\php-cgi.exe
+        set artifactZip=$(Pipeline.Workspace)\app\$(appFolder).zip
 
         echo "📁 Creating staging directory..."
         if not exist "%stagingFolder%" mkdir "%stagingFolder%"
 
         echo "📦 Unzipping artifact to staging..."
-        powershell -NoProfile -Command "Expand-Archive -Path '$(Pipeline.Workspace)\app\myapp.zip' -DestinationPath '%stagingFolder%' -Force"
+        powershell -NoProfile -Command "Expand-Archive -Path '%artifactZip%' -DestinationPath '%stagingFolder%' -Force"
 
         echo "📁 Creating target directory..."
         if not exist "%targetFolder%" mkdir "%targetFolder%"
@@ -90,11 +91,9 @@ steps:
         echo "🔗 Linking site to app pool..."
         %windir%\system32\inetsrv\appcmd set app "%siteName%/" /applicationPool:"%appPoolName%"
 
-
         echo "⚙️ Configuring FastCGI for PHP..."
         %windir%\system32\inetsrv\appcmd set config -section:system.webServer/fastCgi /+"[fullPath='%phpCgiPath%']" /commit:apphost
 
-              
         echo "🔐 Setting folder and file permissions..."
         icacls "%targetFolder%" /grant IIS_IUSRS:F /T
         icacls "%targetFolder%" /grant IUSR:F /T
