@@ -11,7 +11,7 @@ pool:
 variables:
   phpVersion: '8.2'
   repoName: $(Build.Repository.Name)
-  artifactName: $(repoName).zip
+  artifactName: artifactName: $[replace(variables['Build.Repository.Name'], '/', '_')].zip
   appPoolName: $(repoName)-pool
   siteName: $(repoName)
 
