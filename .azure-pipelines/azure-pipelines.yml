@@ -10,7 +10,7 @@ pool:
 
 variables:
   phpVersion: '8.2'
-  repoName: $[format('{0}', replace(last(split(variables['Build.Repository.Name'], '/')), '.git', ''))]
+  repoName: $[replace(split(variables['Build.Repository.Name'], '/')[1], '.git', '')]
   artifactFile: $[format('{0}.zip', variables['repoName'])]  # e.g., 'laravel.zip'
   artifactName: $[format('{0}', variables['artifactFile'])]  # 'laravel.zip'
   appPoolName: $[format('{0}-pool', variables['repoName'])]  # e.g., 'laravel-pool'
