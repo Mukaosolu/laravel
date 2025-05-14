@@ -41,30 +41,10 @@ steps:
   - script: |
       echo "Creating myapp directory and copying files..."
       mkdir "$(Build.ArtifactStagingDirectory)\myapp"
-
-      echo "Copying files..."
       robocopy . "$(Build.ArtifactStagingDirectory)\myapp" /E /NFL /NDL /NJH /NJS /NC
-
-      echo "Contents of myapp before zipping:"
-      dir "$(Build.ArtifactStagingDirectory)\myapp" /s
-
-      echo "Zipping myapp directory..."
       powershell -Command "Compress-Archive -Path '$(Build.ArtifactStagingDirectory)\myapp\*' -DestinationPath '$(Build.ArtifactStagingDirectory)\myapp.zip'"
-
-      echo "Deleting unzipped myapp directory..."
       rmdir /s /q "$(Build.ArtifactStagingDirectory)\myapp"
-    displayName: '✅ Package and clean up myapp'
-
-  - script: |
-      echo "Validating myapp.zip creation..."
-      if exist "$(Build.ArtifactStagingDirectory)\myapp.zip" (
-        echo ✅ myapp.zip exists.
-      ) else (
-        echo ❌ myapp.zip not found!
-        dir "$(Build.ArtifactStagingDirectory)"
-        exit /b 1
-      )
-    displayName: '✅ Validate myapp.zip exists'
+    displayName: '✅ Package myapp'
 
   - task: PublishBuildArtifacts@1
     inputs:
@@ -79,42 +59,58 @@ steps:
       targetPath: '$(Pipeline.Workspace)/app'
     displayName: '📥 Download Build Artifact'
 
-  - script: |
-      echo "Listing downloaded artifacts:"
-      dir "$(Pipeline.Workspace)\app"
-    displayName: '🔍 Check downloaded artifacts'
-
   - task: CmdLine@2
-    displayName: '🚀 Deploy to IIS via Staging'
+    displayName: '🚀 Deploy to IIS + Configure'
     inputs:
       script: |
-        echo "Setting up staging and target paths..."
         set stagingFolder=C:\temp\staging\MyWebApp
         set targetFolder=C:\MyWebApp
+        set siteName=MyWebApp
+        set appPoolName=MyWebApp-pool
+        set phpCgiPath=C:\xampp2\php\php-cgi.exe
 
-        echo "Creating staging directory if it does not exist..."
-        if not exist "%stagingFolder%" (
-          mkdir "%stagingFolder%"
-          echo "✅ Created staging directory: %stagingFolder%"
-        ) else (
-          echo "ℹ️ Staging directory already exists: %stagingFolder%"
-        )
+        echo "📁 Creating staging directory..."
+        if not exist "%stagingFolder%" mkdir "%stagingFolder%"
 
-        echo "Unzipping app to staging folder..."
-        powershell -NoProfile -Command "$zip='$(Pipeline.Workspace)\app\myapp.zip'; $dest='C:\temp\staging\MyWebApp'; Expand-Archive -Path $zip -DestinationPath $dest -Force"
+        echo "📦 Unzipping artifact to staging..."
+        powershell -NoProfile -Command "Expand-Archive -Path '$(Pipeline.Workspace)\app\myapp.zip' -DestinationPath '%stagingFolder%' -Force"
 
-        echo "Listing contents of staging folder after unzip:"
-        dir "%stagingFolder%" /s
+        echo "📁 Creating target directory..."
+        if not exist "%targetFolder%" mkdir "%targetFolder%"
 
-        echo "Copying from staging to IIS folder..."
+        echo "📤 Copying from staging to IIS folder..."
         robocopy "%stagingFolder%" "%targetFolder%" /E /MIR
 
-        echo "Recycling IIS App Pool..."
-        %windir%\system32\inetsrv\appcmd recycle apppool /apppool.name:MyWebApp-pool
+        echo "🌐 Creating App Pool (if not exists)..."
+        %windir%\system32\inetsrv\appcmd list apppool "%appPoolName%" || %windir%\system32\inetsrv\appcmd add apppool /name:"%appPoolName%"
 
-        if %errorlevel% neq 0 (
-          echo ❌ Failed to recycle App Pool
-          exit /b 1
-        ) else (
-          echo ✔️ App Pool recycled successfully.
-        )
+        echo "🌐 Creating IIS Site (if not exists)..."
+        %windir%\system32\inetsrv\appcmd list site "%siteName%" || %windir%\system32\inetsrv\appcmd add site /name:"%siteName%" /bindings:http/*:8000: /physicalPath:"%targetFolder%\public"
+
+        echo "🔗 Linking site to app pool..."
+        %windir%\system32\inetsrv\appcmd set app "%siteName%/" /applicationPool:"%appPoolName%"
+
+
+        echo "⚙️ Configuring FastCGI for PHP..."
+        %windir%\system32\inetsrv\appcmd set config -section:system.webServer/fastCgi /+"[fullPath='%phpCgiPath%']" /commit:apphost
+
+        echo "🧩 Configuring PHP handler mapping..."
+        %windir%\system32\inetsrv\appcmd set config "%siteName%" -section:system.webServer/handlers /+"[name='PHP_via_FastCGI',path='*.php',verb='GET,HEAD,POST',modules='FastCgiModule',scriptProcessor='%phpCgiPath%',resourceType='Either']" /commit:apphost
+
+        echo "📄 Adding MIME type for .php..."
+        %windir%\system32\inetsrv\appcmd set config "%siteName%" -section:staticContent /+"[fileExtension='.php',mimeType='text/plain']" /commit:apphost
+
+        echo "🔐 Setting folder and file permissions..."
+        icacls "%targetFolder%" /grant IIS_IUSRS:F /T
+        icacls "%targetFolder%" /grant IUSR:F /T
+        icacls "%targetFolder%" /grant "NETWORK SERVICE":F /T
+        icacls "%targetFolder%\public\index.php" /grant IIS_IUSRS:F
+
+        echo "♻️ Recycling App Pool..."
+        %windir%\system32\inetsrv\appcmd recycle apppool /apppool.name:"%appPoolName%"
+
+        echo "📦 Running Laravel optimize & migrate..."
+        cd "%targetFolder%"
+        php artisan config:cache
+        php artisan view:cache
+        php artisan migrate --force
