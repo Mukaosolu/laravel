@@ -94,10 +94,7 @@ steps:
         echo "⚙️ Configuring FastCGI for PHP..."
         %windir%\system32\inetsrv\appcmd set config -section:system.webServer/fastCgi /+"[fullPath='%phpCgiPath%']" /commit:apphost
 
-        echo "🧩 Configuring PHP handler mapping..."
-        %windir%\system32\inetsrv\appcmd set config "%siteName%" -section:system.webServer/handlers /+"[name='PHP_via_FastCGI',path='*.php',verb='GET,HEAD,POST',modules='FastCgiModule',scriptProcessor='%phpCgiPath%',resourceType='Either']" /commit:apphost
-
-        
+              
         echo "🔐 Setting folder and file permissions..."
         icacls "%targetFolder%" /grant IIS_IUSRS:F /T
         icacls "%targetFolder%" /grant IUSR:F /T
