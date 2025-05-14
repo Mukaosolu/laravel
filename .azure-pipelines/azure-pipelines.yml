@@ -10,11 +10,11 @@ pool:
 
 variables:
   phpVersion: '8.2'
-  repoName: '$(Build.Repository.Name)'                           # e.g., Online-Banking-System
-  appFolder: '$(Build.Repository.Name)'
-  stagingFolder: 'C:\temp\staging\$(Build.Repository.Name)'
-  targetFolder: 'C:\$(Build.Repository.Name)'
-  appPoolName: '$(Build.Repository.Name)-pool'
+  # Dynamically get the repository name and use it for the app pool and site names
+  repoName: $(Build.Repository.Name)  # Dynamically use the repository name
+  artifactName: $(repoName).zip  # Artifact name based on the repo name
+  appPoolName: $(repoName)-pool  # App pool name based on the repo name
+  siteName: $(repoName)  # Site name based on the repo name
 
 steps:
   - checkout: self
@@ -39,12 +39,17 @@ steps:
     displayName: '✅ Install Laravel dependencies'
 
   - script: |
-      echo "Creating $(appFolder) directory and copying files..."
-      mkdir "$(Build.ArtifactStagingDirectory)\$(appFolder)"
-      robocopy . "$(Build.ArtifactStagingDirectory)\$(appFolder)" /E /NFL /NDL /NJH /NJS /NC
-      powershell -Command "Compress-Archive -Path '$(Build.ArtifactStagingDirectory)\$(appFolder)\*' -DestinationPath '$(Build.ArtifactStagingDirectory)\$(appFolder).zip'"
-      rmdir /s /q "$(Build.ArtifactStagingDirectory)\$(appFolder)"
-    displayName: '✅ Package $(appFolder)'
+      echo "Running PHPUnit tests..."
+      ./vendor/bin/phpunit --configuration phpunit.xml
+    displayName: '✅ Run PHPUnit tests'
+
+  - script: |
+      echo "Creating directories and copying files..."
+      mkdir "$(Build.ArtifactStagingDirectory)\$(repoName)"
+      robocopy . "$(Build.ArtifactStagingDirectory)\$(repoName)" /E /NFL /NDL /NJH /NJS /NC
+      powershell -Command "Compress-Archive -Path '$(Build.ArtifactStagingDirectory)\$(repoName)\*' -DestinationPath '$(Build.ArtifactStagingDirectory)\$(artifactName)'"
+      rmdir /s /q "$(Build.ArtifactStagingDirectory)\$(repoName)"
+    displayName: '✅ Package $(repoName)'
 
   - task: PublishBuildArtifacts@1
     inputs:
@@ -63,18 +68,17 @@ steps:
     displayName: '🚀 Deploy to IIS + Configure'
     inputs:
       script: |
-        set stagingFolder=$(stagingFolder)
-        set targetFolder=$(targetFolder)
-        set siteName=$(repoName)
+        set stagingFolder=C:\temp\staging\$(repoName)
+        set targetFolder=C:\$(repoName)
+        set siteName=$(siteName)
         set appPoolName=$(appPoolName)
         set phpCgiPath=C:\xampp2\php\php-cgi.exe
-        set artifactZip=$(Pipeline.Workspace)\app\$(appFolder).zip
 
         echo "📁 Creating staging directory..."
         if not exist "%stagingFolder%" mkdir "%stagingFolder%"
 
         echo "📦 Unzipping artifact to staging..."
-        powershell -NoProfile -Command "Expand-Archive -Path '%artifactZip%' -DestinationPath '%stagingFolder%' -Force"
+        powershell -NoProfile -Command "Expand-Archive -Path '$(Pipeline.Workspace)\app\$(artifactName)' -DestinationPath '%stagingFolder%' -Force"
 
         echo "📁 Creating target directory..."
         if not exist "%targetFolder%" mkdir "%targetFolder%"
