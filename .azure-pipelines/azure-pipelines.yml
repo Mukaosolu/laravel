@@ -10,11 +10,10 @@ pool:
 
 variables:
   phpVersion: '8.2'
-  # Dynamically get the repository name and use it for the app pool and site names
-  repoName: $(Build.Repository.Name)  # Dynamically use the repository name
-  artifactName: $(repoName).zip  # Artifact name based on the repo name
-  appPoolName: $(repoName)-pool  # App pool name based on the repo name
-  siteName: $(repoName)  # Site name based on the repo name
+  repoName: $(Build.Repository.Name)
+  artifactName: $(repoName).zip
+  appPoolName: $(repoName)-pool
+  siteName: $(repoName)
 
 steps:
   - checkout: self
@@ -44,12 +43,9 @@ steps:
     displayName: '✅ Run PHPUnit tests'
 
   - script: |
-      echo "Creating directories and copying files..."
-      mkdir "$(Build.ArtifactStagingDirectory)\$(repoName)"
-      robocopy . "$(Build.ArtifactStagingDirectory)\$(repoName)" /E /NFL /NDL /NJH /NJS /NC
-      powershell -Command "Compress-Archive -Path '$(Build.ArtifactStagingDirectory)\$(repoName)\*' -DestinationPath '$(Build.ArtifactStagingDirectory)\$(artifactName)'"
-      rmdir /s /q "$(Build.ArtifactStagingDirectory)\$(repoName)"
-    displayName: '✅ Package $(repoName)'
+      echo "Zipping current directory contents into artifact..."
+      powershell -Command "Compress-Archive -Path * -DestinationPath '$(Build.ArtifactStagingDirectory)\$(artifactName)'"
+    displayName: '✅ Package $(artifactName) directly'
 
   - task: PublishBuildArtifacts@1
     inputs:
