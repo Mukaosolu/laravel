@@ -10,10 +10,12 @@ pool:
 
 variables:
   phpVersion: '8.2'
-  repoName: $(Build.Repository.Name)
-  artifactName: artifactName: $[replace(variables['Build.Repository.Name'], '/', '_')].zip
-  appPoolName: $(repoName)-pool
-  siteName: $(repoName)
+  repoName: $[ replace(variables['Build.Repository.Name'], '/', '_') ]
+  artifactFile: $[ format('{0}.zip', replace(variables['Build.Repository.Name'], '/', '_')) ]
+  artifactName: 'drop'
+  appPoolName: $[ format('{0}-pool', replace(variables['Build.Repository.Name'], '/', '_')) ]
+  siteName: $[ replace(variables['Build.Repository.Name'], '/', '_') ]
+
 
 steps:
   - checkout: self
