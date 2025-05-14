@@ -10,10 +10,10 @@ pool:
 
 variables:
   phpVersion: '8.2'
-  repoName: $[last(split(variables['Build.Repository.Name'], '/'))]  # e.g., 'laravel'
-  artifactFile: $[format('{0}.zip', variables['repoName'])]          # e.g., 'laravel.zip'
-  artifactName: $[format('{0}', variables['artifactFile'])]          # also 'laravel.zip'
-  appPoolName: $[format('{0}-pool', variables['repoName'])]          # e.g., 'laravel-pool'
+  repoName: $[format('{0}', replace(last(split(variables['Build.Repository.Name'], '/')), '.git', ''))]
+  artifactFile: $[format('{0}.zip', variables['repoName'])]  # e.g., 'laravel.zip'
+  artifactName: $[format('{0}', variables['artifactFile'])]  # 'laravel.zip'
+  appPoolName: $[format('{0}-pool', variables['repoName'])]  # e.g., 'laravel-pool'
   siteName: $(repoName)
 
 steps:
@@ -44,8 +44,8 @@ steps:
     displayName: '✅ Run PHPUnit tests'
 
   - script: |
-      echo "Zipping current directory contents into artifact (excluding repo folder)..."
-      powershell -Command "Compress-Archive -Path * -DestinationPath '$(Build.ArtifactStagingDirectory)\$(artifactFile)' -Force"
+      echo "Zipping current directory contents into artifact..."
+      powershell -Command "Compress-Archive -Path * -DestinationPath '$(Build.ArtifactStagingDirectory)\$(artifactFile)'"
     displayName: '✅ Package $(artifactFile) directly'
 
   - task: PublishBuildArtifacts@1
