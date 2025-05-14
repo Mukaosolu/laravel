@@ -10,12 +10,11 @@ pool:
 
 variables:
   phpVersion: '8.2'
-  repoName: $[ replace(variables['Build.Repository.Name'], '/', '_') ]
-  artifactFile: $[ format('{0}.zip', replace(variables['Build.Repository.Name'], '/', '_')) ]
-  artifactName: 'drop'
-  appPoolName: $[ format('{0}-pool', replace(variables['Build.Repository.Name'], '/', '_')) ]
-  siteName: $[ replace(variables['Build.Repository.Name'], '/', '_') ]
-
+  repoName: $[last(split(variables['Build.Repository.Name'], '/'))]  # e.g., 'laravel'
+  artifactFile: $[format('{0}.zip', variables['repoName'])]          # e.g., 'laravel.zip'
+  artifactName: $[format('{0}', variables['artifactFile'])]          # also 'laravel.zip'
+  appPoolName: $[format('{0}-pool', variables['repoName'])]          # e.g., 'laravel-pool'
+  siteName: $(repoName)
 
 steps:
   - checkout: self
@@ -45,9 +44,9 @@ steps:
     displayName: '✅ Run PHPUnit tests'
 
   - script: |
-      echo "Zipping current directory contents into artifact..."
-      powershell -Command "Compress-Archive -Path * -DestinationPath '$(Build.ArtifactStagingDirectory)\$(artifactName)'"
-    displayName: '✅ Package $(artifactName) directly'
+      echo "Zipping current directory contents into artifact (excluding repo folder)..."
+      powershell -Command "Compress-Archive -Path * -DestinationPath '$(Build.ArtifactStagingDirectory)\$(artifactFile)' -Force"
+    displayName: '✅ Package $(artifactFile) directly'
 
   - task: PublishBuildArtifacts@1
     inputs:
@@ -76,7 +75,7 @@ steps:
         if not exist "%stagingFolder%" mkdir "%stagingFolder%"
 
         echo "📦 Unzipping artifact to staging..."
-        powershell -NoProfile -Command "Expand-Archive -Path '$(Pipeline.Workspace)\app\$(artifactName)' -DestinationPath '%stagingFolder%' -Force"
+        powershell -NoProfile -Command "Expand-Archive -Path '$(Pipeline.Workspace)\app\$(artifactFile)' -DestinationPath '%stagingFolder%' -Force"
 
         echo "📁 Creating target directory..."
         if not exist "%targetFolder%" mkdir "%targetFolder%"
